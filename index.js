@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -28,6 +28,39 @@ async function run() {
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
+
+    // rooms related apis
+    const roomsCollection = client.db("hotelRoomBooking").collection("rooms");
+    const userCollection = client.db("hotelRoomBooking").collection("users");
+
+
+    app.get("/rooms", async (req, res) => {
+      const cursor = roomsCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    // Add this new route for fetching a single room by ID
+    app.get('/rooms/:id', async (req, res) => {
+      const id = req.params.id;
+    
+      // Validate MongoDB ObjectId
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).json({ error: "Invalid ID format" });
+      }
+    
+      const query = { _id: id };
+      const result = await roomsCollection.findOne(query);
+    
+      if (!result) {
+        return res.status(404).json({ error: "Room not found" });
+      }
+    
+      res.send(result);
+    });
+    
+    
+    
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
