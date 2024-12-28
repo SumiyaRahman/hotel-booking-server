@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
-const moment = require("moment"); // Import Moment.js
+const moment = require("moment");
+const jwt = require("jsonwebtoken") // Import Moment.js
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
@@ -45,6 +46,13 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    // auth related apis
+    app.post('/jwt', async(req,res) => {
+      const user = req.body;
+      const token = jwt.sign(user, 'secret', {expiresIn: '1hr'})
+      res.send(token);
+    })
 
     app.get("/rooms/filter", async (req, res) => {
       try {
@@ -101,25 +109,26 @@ async function run() {
     });
 
     app.post("/users", async (req, res) => {
-      const { uid, email, name, photo } = req.body;
-
+      const { uid, email, name, photoURL } = req.body; // Changed 'photo' to 'photoURL'
+    
       // Validate input
-      if (!uid || !email || !name || !photo) {
+      if (!uid || !email || !name || !photoURL) {
         return res.status(400).json({ error: "All fields are required" });
       }
-
+    
       // Check if user already exists
       const existingUser = await userCollection.findOne({ uid });
       if (existingUser) {
         return res.status(200).json({ message: "User already exists" });
       }
-
+    
       // Create a new user
-      const newUser = { uid, email, name, photo };
+      const newUser = { uid, email, name, photoURL }; // Ensure the correct field name is used
       const result = await userCollection.insertOne(newUser);
-
+    
       res.status(201).json(result);
     });
+    
 
     app.post("/bookings", async (req, res) => {
       const { uid, roomId, checkIn, checkOut, guests, totalPrice } = req.body;
@@ -245,63 +254,62 @@ async function run() {
 
     app.delete("/bookings/:id", async (req, res) => {
       const { id } = req.params;
-
+    
       try {
         // Validate booking ID
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ error: "Invalid Booking ID." });
         }
-
+    
         // Find the booking to get the room ID and checkIn date
         const booking = await bookingsCollection.findOne({
           _id: new ObjectId(id),
         });
-
+    
         if (!booking) {
           return res.status(404).json({ error: "Booking not found." });
         }
-
-        // Get the checkIn date (the actual booked date for the room)
-        const checkInDate = moment(booking.checkIn); // Use the 'checkIn' field
-        const currentDate = moment(); // Get the current date using Moment.js
-
+    
+        // Ensure checkIn is a valid date object
+        const checkInDate = moment(booking.checkIn); // This should be parsed as a moment object
+        const currentDate = moment().startOf('day'); // Get the current date at midnight to ignore the time component
+    
         // Debugging: Log current date and check-in date
         console.log("Current Date: ", currentDate.format("YYYY-MM-DD"));
         console.log("Check-In Date: ", checkInDate.format("YYYY-MM-DD"));
-
+    
         // Compare the checkIn date and current date, ensuring at least 1 day difference
         const diffInDays = checkInDate.diff(currentDate, "days"); // Difference in days
-
+    
         console.log("Difference in days: ", diffInDays); // Log difference in days for debugging
-
+    
         if (diffInDays <= 1) {
           return res.status(400).json({
-            error:
-              "You can only cancel a booking at least 1 day before the check-in date.",
+            error: "You can only cancel a booking at least 1 day before the check-in date.",
           });
         }
-
+    
         // Delete the booking
         const result = await bookingsCollection.deleteOne({
           _id: new ObjectId(id),
         });
-
+    
         if (result.deletedCount === 0) {
           return res.status(404).json({ error: "Failed to delete booking." });
         }
-
+    
         // Update the room's availability to true
         const updateResult = await roomsCollection.updateOne(
           { _id: booking.roomId },
           { $set: { availability: true } } // Set availability to true
         );
-
+    
         if (updateResult.modifiedCount === 0) {
           return res
             .status(500)
             .json({ error: "Failed to update room availability." });
         }
-
+    
         res.status(200).json({
           message: "Booking canceled successfully, and room is now available!",
         });
@@ -310,6 +318,7 @@ async function run() {
         res.status(500).json({ error: "Internal server error." });
       }
     });
+    
 
     app.post("/reviews", async (req, res) => {
       const { uid, roomId, rating, comment } = req.body;
