@@ -123,7 +123,7 @@ async function run() {
       }
     
       // Create a new user
-      const newUser = { uid, email, name, photoURL }; // Ensure the correct field name is used
+      const newUser = { uid, email, name, photoURL }; 
       const result = await userCollection.insertOne(newUser);
     
       res.status(201).json(result);
